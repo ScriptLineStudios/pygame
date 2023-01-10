@@ -980,6 +980,7 @@ surf_rotozoom(PyObject *self, PyObject *args, PyObject *kwargs)
     return (PyObject *)pgSurface_New(newsurf);
 }
 
+
 static SDL_Surface *
 chop(SDL_Surface *src, int x, int y, int width, int height)
 {
@@ -2110,6 +2111,100 @@ clamp_4
 
 #endif
 
+
+
+SDL_Surface *blur(pgSurfaceObject *srcsurf, pgSurfaceObject *destsurf, int kernel_size) {
+    SDL_Surface *src = pgSurface_AsSurface(srcsurf);
+
+    SDL_Surface *newsurf;
+
+    if (!destsurf) {
+        newsurf = newsurf_fromsurf(src, srcsurf->surf->w, srcsurf->surf->h);
+        if (!newsurf)
+            return NULL;
+    }
+    else {
+        newsurf = pgSurface_AsSurface(destsurf);
+    }
+
+    for (int y = 0; y < src->h; y++) {
+        for (int x = 0; x < src->w; x++) {
+            Uint8 *pix;
+            Uint8 *bytebuf;
+
+            Uint32 avg;
+
+
+            Uint8 r1, g1, b1;
+            Uint32 pixel1;
+            SURF_GET_AT(pixel1, src, x, y, src->pixels, src->format, pix);
+            SDL_GetRGB(pixel1, src->format, &r1, &g1, &b1);
+
+            Uint8 r2, g2, b2;
+            Uint32 pixel2;
+            SURF_GET_AT(pixel2, src, x+1, y, src->pixels, src->format, pix);
+            SDL_GetRGB(pixel2, src->format, &r2, &g2, &b2);
+
+            Uint8 r3, g3, b3;
+            Uint32 pixel3;
+            SURF_GET_AT(pixel3, src, x-1, y, src->pixels, src->format, pix);
+            SDL_GetRGB(pixel3, src->format, &r3, &g3, &b3);
+
+            Uint8 r4, g4, b4;
+            Uint32 pixel4;
+            SURF_GET_AT(pixel4, src, x, y+1, src->pixels, src->format, pix);
+            SDL_GetRGB(pixel4, src->format, &r4, &g4, &b4);
+
+            Uint8 ra, ga, ba;
+            ra = (r1 + r2 + r3 + r4) / 4;
+            ga = (g1 + g2 + g3 + r4) / 4;
+            ba = (b1 + b2 + b3 + r4) / 4;
+
+
+
+            avg = SDL_MapRGB(src->format, ra, ga, ba);
+            SURF_SET_AT(avg, newsurf, x, y, newsurf->pixels, newsurf->format,            
+                    bytebuf)       
+        }
+    }
+
+    return newsurf;
+}
+
+static PyObject *
+surf_blur(PyObject *self, PyObject *args, PyObject *kwargs) {
+    pgSurfaceObject *surfobj;
+    pgSurfaceObject *surfobj2 = NULL;
+    SDL_Surface *newsurf;
+    int kernel_size;
+
+    static char *keywords[] = {"surface", "kernel_size", "dest_surface", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O!i|O!", keywords,
+                                     &pgSurface_Type, &surfobj, &kernel_size,
+                                     &pgSurface_Type, &surfobj2)) {
+
+        printf("incorrect args!\n");
+        return NULL;
+                                     }
+
+
+
+    newsurf = blur(surfobj, surfobj2, kernel_size);
+
+    if (!newsurf) {
+        return NULL;
+    }
+
+    if (surfobj2) {
+        Py_INCREF(surfobj2);
+        return (PyObject *)surfobj2;
+    }
+    else {
+        return (PyObject *)pgSurface_New(newsurf);
+    }
+}
+
 /*
 number to use for missing samples
 */
@@ -2996,6 +3091,8 @@ static PyMethodDef _transform_methods[] = {
     {"average_surfaces", (PyCFunction)surf_average_surfaces,
      METH_VARARGS | METH_KEYWORDS, DOC_PYGAMETRANSFORMAVERAGESURFACES},
     {"average_color", (PyCFunction)surf_average_color,
+     METH_VARARGS | METH_KEYWORDS, DOC_PYGAMETRANSFORMAVERAGECOLOR},
+    {"blur", (PyCFunction)surf_blur,
      METH_VARARGS | METH_KEYWORDS, DOC_PYGAMETRANSFORMAVERAGECOLOR},
     {NULL, NULL, 0, NULL}};
 
